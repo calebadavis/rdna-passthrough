@@ -1,0 +1,19 @@
+[Unit]
+Description=Bind AMD GPU functions to vfio-pci and set IOMMU group type
+After=systemd-udev-settle.service
+Before=libvirtd.service virtqemud.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/sh -c '\
+  echo "auto" > /sys/bus/pci/devices/0000:03:00.0/iommu_group/type; \
+  echo "0000:03:00.2" > /sys/bus/pci/drivers/xhci_hcd/unbind 2>/dev/null || true; \
+  echo "0000:03:00.3" > /sys/bus/pci/drivers/i2c-designware-pci/unbind 2>/dev/null || true; \
+  echo "vfio-pci" > /sys/bus/pci/devices/0000:03:00.2/driver_override; \
+  echo "vfio-pci" > /sys/bus/pci/devices/0000:03:00.3/driver_override; \
+  echo "0000:03:00.2" > /sys/bus/pci/drivers/vfio-pci/bind 2>/dev/null || true; \
+  echo "0000:03:00.3" > /sys/bus/pci/drivers/vfio-pci/bind 2>/dev/null || true'
+
+[Install]
+WantedBy=multi-user.target
