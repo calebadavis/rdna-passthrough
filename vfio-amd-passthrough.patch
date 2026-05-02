@@ -1,0 +1,81 @@
+diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
+--- a/drivers/iommu/iommu.c	2026-04-22 07:30:53.000000000 -0400
++++ b/drivers/iommu/iommu.c	2026-05-02 10:11:37.925288209 -0400
+@@ -1191,12 +1191,15 @@
+ 		size_t map_size = 0;
+ 
+ 		if (entry->type == IOMMU_RESV_DIRECT)
+-			dev->iommu->require_direct = 1;
++			dev->iommu->require_direct = 0; /* patched: don't force require_direct */
+ 
+ 		if ((entry->type != IOMMU_RESV_DIRECT &&
+ 		     entry->type != IOMMU_RESV_DIRECT_RELAXABLE) ||
+ 		    !iommu_is_dma_domain(domain))
+ 			continue;
++		/* Skip identity mapping of address 0 - VFIO handles this region separately */
++		if (entry->start == 0)
++			continue;
+ 
+ 		start = ALIGN(entry->start, pg_size);
+ 		end   = ALIGN(entry->start + entry->length, pg_size);
+@@ -1909,7 +1912,8 @@
+ 	}
+ 
+ 	if (target_type) {
+-		if (driver_type && target_type != driver_type)
++		if (driver_type && target_type != driver_type &&
++		    driver_type != IOMMU_DOMAIN_IDENTITY)
+ 			return -1;
+ 		return target_type;
+ 	}
+@@ -2315,7 +2319,7 @@
+ 	 * being used with iommu_group_claim_dma_owner() which will block
+ 	 * vfio and iommufd as well.
+ 	 */
+-	if (dev->iommu->require_direct &&
++	if (0 && dev->iommu->require_direct &&
+ 	    (new_domain->type == IOMMU_DOMAIN_BLOCKED ||
+ 	     new_domain == group->blocking_domain)) {
+ 		dev_warn(dev,
+diff --git a/drivers/vfio/vfio_iommu_type1.c b/drivers/vfio/vfio_iommu_type1.c
+--- a/drivers/vfio/vfio_iommu_type1.c	2026-04-22 07:30:53.000000000 -0400
++++ b/drivers/vfio/vfio_iommu_type1.c	2026-05-02 10:07:52.366147042 -0400
+@@ -766,7 +766,8 @@
+ 			 * the user.
+ 			 */
+ 			if (acct_pages) {
+-				if (!dma->lock_cap &&
++				/* patched: skip memlock check - allow vfio passthrough */
++				if (0 && !dma->lock_cap && limit != RLIM_INFINITY &&
+ 				    mm->locked_vm + lock_acct + acct_pages > limit) {
+ 					pr_warn("%s: RLIMIT_MEMLOCK (%ld) exceeded\n",
+ 						__func__, limit << PAGE_SHIFT);
+@@ -1775,7 +1776,7 @@
+ 	 */
+ 	get_task_struct(current->group_leader);
+ 	dma->task = current->group_leader;
+-	dma->lock_cap = capable(CAP_IPC_LOCK);
++	dma->lock_cap = true; /* patched: always allow locking for vfio passthrough */
+ 	dma->mm = current->mm;
+ 	mmgrab(dma->mm);
+ 
+@@ -2139,6 +2140,9 @@
+ 
+ 		if (resv->type == IOMMU_RESV_DIRECT_RELAXABLE)
+ 			continue;
++		/* patched: skip excluding direct regions at 0 to allow QEMU DMA mapping */
++		if (resv->type == IOMMU_RESV_DIRECT && resv->start == 0)
++			continue;
+ 
+ 		start = resv->start;
+ 		end = resv->start + resv->length - 1;
+@@ -2230,6 +2234,9 @@
+ {
+ 	struct iommu_domain **domain = data;
+ 
++	/* Clear require_direct before allocation to get a DMA domain */
++	if (dev->iommu)
++		dev->iommu->require_direct = 0;
+ 	*domain = iommu_paging_domain_alloc(dev);
+ 	return 1; /* Don't iterate */
+ }
