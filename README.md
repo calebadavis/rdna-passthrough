@@ -36,6 +36,10 @@ amd_iommu=on amd_iommu_force_isolation=0 vfio-pci.ids=1002:744c,1002:ab30,1002:7
 - `amd_iommu=on` — enable AMD IOMMU
 - `amd_iommu_force_isolation=0` — disable strict IOMMU isolation check
 - `vfio-pci.ids=...` — bind all 4 GPU functions to vfio-pci at boot
+- Note that the pci IDs listed are specific to the GPU I tested. Yours might differ. You can use this command to determine them:
+```
+lspci -nn | grep -i "VGA\|Audio\|USB\|Serial" | grep AMD
+```
 
 Regenerate GRUB config:
 ```bash
@@ -98,6 +102,31 @@ sudo dnf install \
 ---
 
 ## 4. Systemd Service — GPU Function Binding
+
+First, identify your GPU's PCI bus address:
+
+```bash
+lspci -nn | grep -i "VGA" | grep AMD
+```
+
+Example output:
+```
+03:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 31 [1002:744c]
+```
+
+The bus address is the `XX` in `XX:00.0` — in this example `03`. Replace all
+occurrences of `03` in the service file with your actual bus address.
+
+You can verify which functions are present on your GPU:
+
+```bash
+for f in 0 1 2 3; do
+  lspci -nns 0000:XX:00.$f 2>/dev/null && echo "function $f present" || echo "function $f not present"
+done
+```
+
+Not all GPUs expose all four functions — only pass through the functions that
+are actually present on your card.
 
 Functions `03:00.2` (USB) and `03:00.3` (Serial) need to be manually bound to
 vfio-pci since they're driven by built-in kernel drivers that load before modprobe.
