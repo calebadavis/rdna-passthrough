@@ -1,0 +1,249 @@
+<domain type="kvm">
+  <name>win11</name>
+  <!--
+    AMD GPU Passthrough VM Template for Windows 11
+    Tested with: RX 7900 XTX (reference VBIOS) on Fedora 44
+    Requires: patched kernel (vfio-amd-passthrough.patch)
+    
+    Replace the following placeholders:
+      YOUR_GPU_BUS     - PCI bus of your GPU (e.g., 03)
+      YOUR_DISK_PATH   - Path to your VM disk image
+      YOUR_WIN11_ISO   - Path to Windows 11 ISO
+      YOUR_VIRTIO_ISO  - Path to virtio-win ISO
+      YOUR_ROM_PATH    - Path to GPU VBIOS ROM file
+      YOUR_USB_VENDOR  - USB vendor ID of passthrough keyboard/mouse
+      YOUR_USB_PRODUCT - USB product ID of passthrough keyboard/mouse
+  -->
+  <metadata>
+    <libosinfo:libosinfo xmlns:libosinfo="http://libosinfo.org/xmlns/libvirt/domain/1.0">
+      <libosinfo:os id="http://microsoft.com/win/11"/>
+    </libosinfo:libosinfo>
+  </metadata>
+  <memory unit="KiB">16777216</memory>
+  <currentMemory unit="KiB">16777216</currentMemory>
+  <!-- Adjust vcpu count to leave some cores for the host -->
+  <vcpu placement="static">12</vcpu>
+  <os firmware="efi">
+    <type arch="x86_64" machine="q35">hvm</type>
+    <firmware>
+      <feature enabled="yes" name="enrolled-keys"/>
+      <feature enabled="yes" name="secure-boot"/>
+    </firmware>
+    <loader readonly="yes" secure="yes" type="pflash" format="qcow2">/usr/share/edk2/ovmf/OVMF_CODE_4M.secboot.qcow2</loader>
+    <nvram template="/usr/share/edk2/ovmf/OVMF_VARS_4M.secboot.qcow2" templateFormat="qcow2" format="qcow2">/var/lib/libvirt/qemu/nvram/win11_VARS.qcow2</nvram>
+  </os>
+  <features>
+    <acpi/>
+    <apic/>
+    <hyperv mode="custom">
+      <relaxed state="on"/>
+      <vapic state="on"/>
+      <spinlocks state="on" retries="8191"/>
+      <!-- Vendor ID must be set to prevent AMD driver detection of hypervisor -->
+      <vendor_id state="on" value="AuthenticAMD"/>
+    </hyperv>
+    <kvm>
+      <hidden state="on"/>
+    </kvm>
+    <smm state="on"/>
+    <!-- Must be 'qemu' not 'kvm' when using IOMMU interrupt remapping -->
+    <ioapic driver="qemu"/>
+  </features>
+  <!-- host-passthrough gives the VM full access to CPU features -->
+  <cpu mode="host-passthrough" check="none" migratable="off">
+    <!-- Adjust cores/threads to match your CPU topology -->
+    <topology sockets="1" dies="1" clusters="1" cores="6" threads="2"/>
+    <!-- topoext required for AMD CPUs with SMT -->
+    <feature policy="require" name="topoext"/>
+  </cpu>
+  <clock offset="localtime">
+    <timer name="rtc" tickpolicy="catchup"/>
+    <timer name="pit" tickpolicy="delay"/>
+    <timer name="hpet" present="no"/>
+    <timer name="hypervclock" present="yes"/>
+  </clock>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <pm>
+    <suspend-to-mem enabled="no"/>
+    <suspend-to-disk enabled="no"/>
+  </pm>
+  <devices>
+    <emulator>/usr/bin/qemu-system-x86_64</emulator>
+
+    <!-- Primary VM disk - VirtIO for best performance -->
+    <disk type="file" device="disk">
+      <driver name="qemu" type="qcow2" cache="none" io="native"/>
+      <source file="YOUR_DISK_PATH"/>
+      <target dev="vda" bus="virtio"/>
+      <boot order="2"/>
+    </disk>
+
+    <!-- Windows 11 installation ISO - remove after installation -->
+    <disk type="file" device="cdrom">
+      <driver name="qemu" type="raw"/>
+      <source file="YOUR_WIN11_ISO"/>
+      <target dev="sdb" bus="sata"/>
+      <readonly/>
+      <boot order="1"/>
+    </disk>
+
+    <!-- VirtIO drivers ISO - remove after installation -->
+    <!-- Download from: https://github.com/virtio-win/virtio-win-pkg-scripts -->
+    <disk type="file" device="cdrom">
+      <driver name="qemu" type="raw"/>
+      <source file="YOUR_VIRTIO_ISO"/>
+      <target dev="sdc" bus="sata"/>
+      <readonly/>
+    </disk>
+
+    <controller type="usb" index="0" model="qemu-xhci" ports="15"/>
+    <controller type="pci" index="0" model="pcie-root"/>
+    <controller type="pci" index="1" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="1" port="0x8"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x01" function="0x0" multifunction="on"/>
+    </controller>
+    <controller type="pci" index="2" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="2" port="0x9"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x01" function="0x1"/>
+    </controller>
+    <controller type="pci" index="3" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="3" port="0xa"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x01" function="0x2"/>
+    </controller>
+    <controller type="pci" index="4" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="4" port="0xb"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x01" function="0x3"/>
+    </controller>
+    <controller type="pci" index="5" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="5" port="0xc"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x01" function="0x4"/>
+    </controller>
+    <controller type="pci" index="6" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="6" port="0xd"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x01" function="0x5"/>
+    </controller>
+    <controller type="pci" index="7" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="7" port="0xe"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x01" function="0x6"/>
+    </controller>
+    <controller type="pci" index="8" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="8" port="0xf"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x01" function="0x7"/>
+    </controller>
+    <controller type="pci" index="9" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="9" port="0x10"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x0" multifunction="on"/>
+    </controller>
+    <controller type="pci" index="10" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="10" port="0x11"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x1"/>
+    </controller>
+    <controller type="pci" index="11" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="11" port="0x12"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x2"/>
+    </controller>
+    <controller type="pci" index="12" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="12" port="0x13"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x3"/>
+    </controller>
+    <controller type="pci" index="13" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="13" port="0x14"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x4"/>
+    </controller>
+    <controller type="pci" index="14" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="14" port="0x15"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x5"/>
+    </controller>
+    <controller type="pci" index="15" model="pcie-root-port">
+      <model name="pcie-root-port"/>
+      <target chassis="15" port="0x16"/>
+      <address type="pci" domain="0x0000" bus="0x00" slot="0x02" function="0x6"/>
+    </controller>
+    <controller type="pci" index="16" model="pcie-to-pci-bridge">
+      <model name="pcie-pci-bridge"/>
+    </controller>
+    <controller type="sata" index="0"/>
+
+    <!-- VirtIO network for best performance -->
+    <interface type="network">
+      <source network="default"/>
+      <model type="virtio"/>
+    </interface>
+
+    <input type="mouse" bus="ps2"/>
+    <input type="keyboard" bus="ps2"/>
+
+    <!-- TPM required for Windows 11 -->
+    <tpm model="tpm-crb">
+      <backend type="emulator" version="2.0"/>
+    </tpm>
+
+    <audio id="1" type="none"/>
+
+    <!--
+      GPU passthrough - function 0 (display)
+      ROM file provides GOP for display output during UEFI boot.
+      Download matching VBIOS from https://www.techpowerup.com/vgabios/
+      and place in /usr/share/qemu/
+    -->
+    <hostdev mode="subsystem" type="pci" managed="yes">
+      <source>
+        <address domain="0x0000" bus="0xYOUR_GPU_BUS" slot="0x00" function="0x0"/>
+      </source>
+      <rom bar="on" file="YOUR_ROM_PATH"/>
+    </hostdev>
+
+    <!-- GPU passthrough - function 1 (HDMI audio) -->
+    <hostdev mode="subsystem" type="pci" managed="yes">
+      <source>
+        <address domain="0x0000" bus="0xYOUR_GPU_BUS" slot="0x00" function="0x1"/>
+      </source>
+    </hostdev>
+
+    <!-- GPU passthrough - function 2 (USB controller) -->
+    <hostdev mode="subsystem" type="pci" managed="yes">
+      <source>
+        <address domain="0x0000" bus="0xYOUR_GPU_BUS" slot="0x00" function="0x2"/>
+      </source>
+    </hostdev>
+
+    <!-- GPU passthrough - function 3 (serial bus) -->
+    <hostdev mode="subsystem" type="pci" managed="yes">
+      <source>
+        <address domain="0x0000" bus="0xYOUR_GPU_BUS" slot="0x00" function="0x3"/>
+      </source>
+    </hostdev>
+
+    <!--
+      USB device passthrough for dedicated keyboard/mouse
+      Find vendor/product IDs with: lsusb
+      Remove <address> element if only one device with that vendor:product exists
+    -->
+    <hostdev mode="subsystem" type="usb" managed="yes">
+      <source>
+        <vendor id="YOUR_USB_VENDOR"/>
+        <product id="YOUR_USB_PRODUCT"/>
+      </source>
+    </hostdev>
+
+    <watchdog model="itco" action="reset"/>
+
+    <memballoon model="virtio"/>
+  </devices>
+</domain>
