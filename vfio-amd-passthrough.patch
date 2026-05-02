@@ -1,3 +1,12 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# AMD GPU VFIO Passthrough Kernel Patch
+# Copyright (C) 2026 Caleb Davis
+#
+# This patch is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+
 diff --git a/drivers/iommu/iommu.c b/drivers/iommu/iommu.c
 --- a/drivers/iommu/iommu.c	2026-04-22 07:30:53.000000000 -0400
 +++ b/drivers/iommu/iommu.c	2026-05-02 10:11:37.925288209 -0400

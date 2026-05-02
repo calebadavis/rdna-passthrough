@@ -1,6 +1,9 @@
 # AMD RX 7900 XTX GPU Passthrough Setup Guide
 ## Host: Fedora 44, AMD Ryzen 9800X3D, Gigabyte Aorus Elite X870m WiFi7
 
+## License
+Copyright (C) 2026 Caleb Davis
+Licensed under the GNU General Public License v3 or later. See [LICENSE](LICENSE).
 ---
 
 ## Overview

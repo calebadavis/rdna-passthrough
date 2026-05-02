@@ -1,3 +1,10 @@
+<!--
+  SPDX-License-Identifier: GPL-3.0-or-later
+  Copyright (C) 2026 Caleb Davis
+  Licensed under the GNU General Public License v3 or later.
+  See LICENSE file in the repository root for details.
+-->
+
 <domain type="kvm">
   <name>win11</name>
   <!--
