@@ -1,9 +1,6 @@
 # AMD RX 7900 XTX GPU Passthrough Setup Guide
 ## Host: Fedora 44, AMD Ryzen 9800X3D, Gigabyte Aorus Elite X870m WiFi7
 
-## License
-Copyright (C) 2026 Caleb Davis
-Licensed under the GNU General Public License v3 or later. See [LICENSE](LICENSE).
 ---
 
 ## Overview
@@ -277,3 +274,8 @@ passthrough.
 7. `vfio_iommu_type1.c`: Don't exclude address 0 from IOVA range
 8. `vfio_iommu_type1.c`: Clear `require_direct` before VFIO domain allocation
 
+---
+
+## License
+Copyright (C) 2026 Caleb Davis
+Licensed under the GNU General Public License v3 or later. See [LICENSE](LICENSE).
