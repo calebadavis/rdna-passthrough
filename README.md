@@ -1,7 +1,11 @@
 # AMD RX 7900 XTX GPU Passthrough Setup Guide
+
 ## Host: Fedora 44, AMD Ryzen 9800X3D, Gigabyte Aorus Elite X870m WiFi7
 
----
+## License
+
+Copyright (C) 2026 Caleb Davis
+Licensed under the GNU General Public License v3 or later. See [LICENSE](https://github.com/calebadavis/rdna-passthrough/blob/main/LICENSE).
 
 ## Overview
 
@@ -30,19 +34,26 @@ prevent VFIO container setup on kernel >= 6.10.
 Add to `GRUB_CMDLINE_LINUX` in `/etc/default/grub`:
 
 ```
-amd_iommu=on amd_iommu_force_isolation=0 vfio-pci.ids=1002:744c,1002:ab30,1002:7446,1002:7444
+amd_iommu=on amd_iommu_force_isolation=0 vfio-pci.ids=1002:744c,1002:ab30,1002:7446,1002:7444 amd_vfio_pass_fix=1
 ```
 
 - `amd_iommu=on` — enable AMD IOMMU
 - `amd_iommu_force_isolation=0` — disable strict IOMMU isolation check
 - `vfio-pci.ids=...` — bind all 4 GPU functions to vfio-pci at boot
-- Note that the pci IDs listed are specific to the GPU I tested. Yours might differ. You can use this command to determine them:
-```
-lspci -nn | grep -i "VGA\|Audio\|USB\|Serial" | grep AMD
-```
+- `amd_vfio_pass_fix=1` — **enable the VFIO passthrough workarounds** introduced
+  by this patch (see section 10). Without this parameter the patched kernel behaves
+  identically to stock; the workarounds are completely inactive.
+
+> **Note:** The PCI IDs listed above are specific to the RX 7900 XTX tested here.
+> Yours may differ. Use the following command to find the correct IDs for your card:
+>
+> ```
+> lspci -nn | grep -i "VGA\|Audio\|USB\|Serial" | grep AMD
+> ```
 
 Regenerate GRUB config:
-```bash
+
+```
 sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 ```
 
@@ -56,7 +67,7 @@ VBIOS flag issue.
 
 ### Building the kernel RPM
 
-```bash
+```
 # Install build dependencies
 sudo dnf install -y rpm-build make gcc flex bison openssl-devel \
   elfutils-libelf-devel bc dwarves python3-devel asciidoc xmlto python3-sphinx
@@ -103,37 +114,12 @@ sudo dnf install \
 
 ## 4. Systemd Service — GPU Function Binding
 
-First, identify your GPU's PCI bus address:
-
-```bash
-lspci -nn | grep -i "VGA" | grep AMD
-```
-
-Example output:
-```
-03:00.0 VGA compatible controller [0300]: Advanced Micro Devices, Inc. [AMD/ATI] Navi 31 [1002:744c]
-```
-
-The bus address is the `XX` in `XX:00.0` — in this example `03`. Replace all
-occurrences of `03` in the service file with your actual bus address.
-
-You can verify which functions are present on your GPU:
-
-```bash
-for f in 0 1 2 3; do
-  lspci -nns 0000:XX:00.$f 2>/dev/null && echo "function $f present" || echo "function $f not present"
-done
-```
-
-Not all GPUs expose all four functions — only pass through the functions that
-are actually present on your card.
-
 Functions `03:00.2` (USB) and `03:00.3` (Serial) need to be manually bound to
 vfio-pci since they're driven by built-in kernel drivers that load before modprobe.
 
 Create `/etc/systemd/system/vfio-bind-gpu.service`:
 
-```ini
+```
 [Unit]
 Description=Bind AMD GPU functions to vfio-pci and set IOMMU group type
 After=systemd-udev-settle.service
@@ -156,7 +142,8 @@ WantedBy=multi-user.target
 ```
 
 Enable:
-```bash
+
+```
 sudo systemctl enable --now vfio-bind-gpu.service
 ```
 
@@ -165,6 +152,7 @@ sudo systemctl enable --now vfio-bind-gpu.service
 ## 5. libvirt Configuration
 
 Edit `/etc/libvirt/qemu.conf` and add:
+
 ```
 iommufd = 0
 ```
@@ -172,7 +160,8 @@ iommufd = 0
 This forces QEMU to use the legacy vfio-pci container interface instead of iommufd.
 
 Restart libvirt:
-```bash
+
+```
 sudo systemctl restart virtqemud virtnetworkd
 ```
 
@@ -182,12 +171,12 @@ sudo systemctl restart virtqemud virtnetworkd
 
 Create `/etc/systemd/system/virtqemud.service.d/override.conf`:
 
-```ini
+```
 [Service]
 LimitMEMLOCK=infinity
 ```
 
-```bash
+```
 sudo systemctl daemon-reload
 sudo systemctl restart virtqemud
 ```
@@ -201,7 +190,8 @@ The GPU VBIOS ROM is required for OVMF/UEFI to initialize the GPU display output
 (search for RX 7900 XTX, VBIOS version `022.001.002.009.000001`).
 
 Place in a QEMU-accessible location:
-```bash
+
+```
 sudo cp AMD.RX7900XTX.24576.221115.rom /usr/share/qemu/
 sudo chmod 644 /usr/share/qemu/AMD.RX7900XTX.24576.221115.rom
 ```
@@ -264,13 +254,14 @@ Key elements of the libvirt VM definition:
 
 After setup, verify all 4 GPU functions are bound to vfio-pci:
 
-```bash
+```
 lspci -nnk | grep -A 2 "03:00"
 # All should show: Kernel driver in use: vfio-pci
 ```
 
 Check IOMMU groups:
-```bash
+
+```
 for d in /sys/kernel/iommu_groups/*/devices/*; do
   n=${d#*/iommu_groups/*}; n=${n%%/*}
   printf 'IOMMU Group %s ' "$n"
@@ -279,7 +270,8 @@ done | grep "03:00"
 ```
 
 Start VM:
-```bash
+
+```
 sudo virsh start win11
 ```
 
@@ -292,19 +284,31 @@ to assign an identity IOMMU domain to the GPU and set `require_direct=1`. On
 kernel >= 6.10, this prevents VFIO from setting up the container needed for
 passthrough.
 
-**Patches applied:**
+### Boot parameter gate
 
-1. `iommu.c`: Don't re-set `require_direct=1` from RESV_DIRECT regions
-2. `iommu.c`: Skip identity mapping of address 0 (conflicts with VFIO DMA)  
-3. `iommu.c`: Allow overriding identity domains with DMA_FQ domain type
+All workarounds introduced by this patch are **disabled by default**. They are
+activated exclusively when the kernel is booted with:
+
+```
+amd_vfio_pass_fix=1
+```
+
+This is implemented via a standard `__setup()` early-param handler defined in
+`drivers/iommu/iommu.c`. The resulting `bool amd_vfio_pass_fix` variable is
+exported via `EXPORT_SYMBOL_GPL` and read as an `extern` in
+`drivers/vfio/vfio_iommu_type1.c`. Without the parameter, every patched code
+path falls back to identical stock kernel behaviour — no safety checks are
+relaxed, no IOMMU logic is altered.
+
+### Patches applied
+
+All eight hunks below are individually conditioned on `amd_vfio_pass_fix`:
+
+1. `iommu.c`: Don't re-set `require_direct=1` from RESV\_DIRECT regions
+2. `iommu.c`: Skip identity mapping of address 0 (conflicts with VFIO DMA)
+3. `iommu.c`: Allow overriding identity domains with DMA\_FQ domain type
 4. `iommu.c`: Disable firmware 1:1 mapping rejection for VFIO/iommufd
-5. `vfio_iommu_type1.c`: Skip RLIMIT_MEMLOCK check for multi-group passthrough
+5. `vfio_iommu_type1.c`: Skip RLIMIT\_MEMLOCK check for multi-group passthrough
 6. `vfio_iommu_type1.c`: Always allow memory locking for VFIO containers
 7. `vfio_iommu_type1.c`: Don't exclude address 0 from IOVA range
 8. `vfio_iommu_type1.c`: Clear `require_direct` before VFIO domain allocation
-
----
-
-## License
-Copyright (C) 2026 Caleb Davis
-Licensed under the GNU General Public License v3 or later. See [LICENSE](LICENSE).
