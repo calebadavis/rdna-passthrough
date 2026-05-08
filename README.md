@@ -61,9 +61,7 @@ sudo grub2-mkconfig -o /boot/grub2/grub.cfg
 
 ## 3. Custom Patched Kernel
 
-The kernel requires two patches to `drivers/iommu/iommu.c` and
-`drivers/vfio/vfio_iommu_type1.c` to work around the `require_direct`/`force_iommu`
-VBIOS flag issue.
+The kernel requires code modifications to `drivers/iommu/iommu.c` and `drivers/vfio/vfio_iommu_type1.c` to work around the `require_direct`/`force_iommu` VBIOS flag issue.
 
 ### Building the kernel RPM
 
