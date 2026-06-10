@@ -119,21 +119,26 @@ Create `/etc/systemd/system/vfio-bind-gpu.service`:
 
 ```
 [Unit]
-Description=Bind AMD GPU functions to vfio-pci and set IOMMU group type
+Description=Bind AMD GPU functions to vfio-pci
 After=systemd-udev-settle.service
 Before=libvirtd.service virtqemud.service
+ConditionKernelCommandLine=vfio-pci.ids
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/bin/sh -c '\
-  echo "auto" > /sys/bus/pci/devices/0000:03:00.0/iommu_group/type; \
   echo "0000:03:00.2" > /sys/bus/pci/drivers/xhci_hcd/unbind 2>/dev/null || true; \
   echo "0000:03:00.3" > /sys/bus/pci/drivers/i2c-designware-pci/unbind 2>/dev/null || true; \
+  sleep 1; \
   echo "vfio-pci" > /sys/bus/pci/devices/0000:03:00.2/driver_override; \
   echo "vfio-pci" > /sys/bus/pci/devices/0000:03:00.3/driver_override; \
   echo "0000:03:00.2" > /sys/bus/pci/drivers/vfio-pci/bind 2>/dev/null || true; \
-  echo "0000:03:00.3" > /sys/bus/pci/drivers/vfio-pci/bind 2>/dev/null || true'
+  echo "0000:03:00.3" > /sys/bus/pci/drivers/vfio-pci/bind 2>/dev/null || true; \
+  echo "0000:0d:00.0" > /sys/bus/pci/drivers/xhci_hcd/unbind 2>/dev/null || true; \
+  echo "vfio-pci" > /sys/bus/pci/devices/0000:0d:00.0/driver_override; \
+  echo "0000:0d:00.0" > /sys/bus/pci/drivers/vfio-pci/bind 2>/dev/null || true; \
+  echo "auto" > /sys/kernel/iommu_groups/15/type 2>/dev/null || true'
 
 [Install]
 WantedBy=multi-user.target
